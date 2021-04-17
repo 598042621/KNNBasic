@@ -5,9 +5,10 @@ import numpy as np
 from surprise import Dataset
 from surprise import Reader
 from surprise import KNNBasic
+from collections import defaultdict
 
-user_file_path = r'./dataset/dataset1/user.csv'
-movie_file_path = r'./dataset/dataset1/movie.csv'
+user_file_path = r'./dataset/dataset/user.csv'
+movie_file_path = r'./dataset/dataset/movie.csv'
 user_item_rating_dump_path = r'./dataset/cache/user_item_rating.pkl'
 movie_name_id_dump_path = r'./dataset/cache/movie_name_id.pkl'
 rid_to_name_dump_path = r'./dataset/cache/rid_to_name.pkl'
@@ -68,10 +69,11 @@ def getSimModel(user_item_rating):
     algo = KNNBasic(sim_options = sim_options)
 
     trainset = data.build_full_trainset()
+    testset = trainset.build_testset()
 
     algo.fit(trainset)
 
-    return algo
+    return trainset, testset, algo
 
 # 基于之前训练的模型 进行相关电影的推荐  步骤：3
 def showSimilarMovies(algo, rid_to_name, name_to_rid, movie_name, k):
@@ -89,6 +91,19 @@ def showSimilarMovies(algo, rid_to_name, name_to_rid, movie_name, k):
     for movie in neighbors_movies:
         print(movie)
 
+# 获得每个用户的top-N推荐
+def get_top_n(predictions, n=10):
+    # 首先将预测值映射至每个用户
+    top_n = defaultdict(list)
+    for uid, iid, true_r, est, _ in predictions:
+        top_n[uid].append((iid, est))
+
+    # Then sort the predictions for each user and retrieve the k highest ones.
+    for uid, user_ratings in top_n.items():
+        user_ratings.sort(key=lambda x: x[1], reverse=True)
+        top_n[uid] = user_ratings[:n]
+
+    return top_n
 
 if __name__ == '__main__':
     # 数据预处理，返回user_item_rating用于模型训练, 返回movie_name_id用于ID与名称转换
@@ -96,7 +111,23 @@ if __name__ == '__main__':
     rid_to_name, name_to_rid = read_item_names(user_item_rating)
 
     # 训练模型
-    algo = getSimModel(user_item_rating)
+    trainset, testset, algo = getSimModel(user_item_rating)
+
+    # 获取测试集Top10
+    predictions = algo.test(testset)
+    top_n = get_top_n(predictions, n=10)
+
+
+
+
+
+
+
+
+
+
+
+
 
     # 召回与目标电影相似的Top10
-    showSimilarMovies(algo, rid_to_name, name_to_rid, '我不是药神', 10)
+    #showSimilarMovies(algo, rid_to_name, name_to_rid, '我不是药神', 10)
